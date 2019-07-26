@@ -21,17 +21,13 @@ const request = require('request');
 
 class Agones {
     constructor(options) {
-        this.keyFile = options.keyFile;
+        this.keyFile = options.keyFile || process.env.GOOGLE_APPLICATION_CREDENTIALS;
         this.project_id = options.project_id;
         this.zone = options.zone;
         this.cluster_name = options.cluster_name;
         this.namespaces = options.namespaces || 'default';
         this._cluster = null;
         this._user = null;
-    }
-
-    getBlah() {
-        console.log(this._user);
     }
 
     refreshToken() {
@@ -41,7 +37,7 @@ class Agones {
                 this._user = result[1];
                 resolve();
             }).catch((error) => {
-                console.log('refreshToken', error);
+                console.error('refreshToken', error);
                 reject(error);
             })
         });
@@ -77,24 +73,22 @@ class Agones {
                 kc.applyToRequest(option);
                 request(option, (error, response, body) => {
                     if (error) {
-                        console.log(response, body, `error: ${error}`);
+                        console.error('setGameserverAllocate() request', `error: ${error}`);
+                        reject(error);
                     }
                     var ret = {};
             
                     if (body.status.state == 'Allocated') {
                         ret = {'name': body.status.gameServerName, 'address': body.status.address, 'node': body.status.nodeName, 'port': body.status.ports[0].port};
-                        console.log(ret);
                     } else if (body.status.state == 'UnAllocated') {
                         ret = {'name': '', 'error': 'Unable to allocate a gameserver'};
-                        console.log(ret);
                     } else {
                         ret = {'name': '', 'error': 'Unknown error, no gameserver(s) allocated'};
-                        console.log(ret);
                     }
                     resolve(ret);
                 });
             }).catch((error) => {
-                console.error(error);
+                console.error('setGameserverAllocate() catch', error);
                 reject(error);
             })
         });
@@ -112,8 +106,6 @@ class Agones {
                     }
                 };
             
-                console.log('data', data);
-            
                 const k8s = require('@kubernetes/client-node');
                 const request = require('request');
             
@@ -130,19 +122,19 @@ class Agones {
             
                 request(option, (error, response, body) => {
                     if (error) {
-                        console.log(response, body, `error: ${error}`);
+                        console.error('setGameserverReplica() request', `error: ${error}`);
+                        reject(error);
                     }
-                    console.log('body', body);
                     resolve(body);
                 });
             }).catch((error) => {
-                console.error(error);
+                console.error('setGameserverReplica()', error);
                 reject(error);
             })
         });
     }
 
-    getFleet(fleet = 'agones') {
+    getFleet(fleet) {
         return new Promise((resolve, reject) => {
             this.refreshToken().then(() => {
                 const k8s = require('@kubernetes/client-node');
@@ -157,7 +149,8 @@ class Agones {
                 request.get(`${kc.getCurrentCluster().server}/apis/stable.agones.dev/v1alpha1/namespaces/${this.namespaces}/fleets`, opts,
                 (error, response, body) => {
                     if (error) {
-                        console.log(`error: ${error}`);
+                        console.error('getFleet() request', `error: ${error}`);
+                        reject(error);
                     }
 
                     var obj = JSON.parse(body);
@@ -167,11 +160,10 @@ class Agones {
                             ret.push(obj)
                         }
                     });
-                    console.log(ret);
                     resolve(ret);
                 });
             }).catch((error) => {
-                console.error(error);
+                console.error('getFleet()', error);
                 reject(error);
             })
         });
@@ -192,7 +184,8 @@ class Agones {
                 request.get(`${kc.getCurrentCluster().server}/apis/stable.agones.dev/v1alpha1/namespaces/${this.namespaces}/gameservers`, opts,
                 (error, response, body) => {
                     if (error) {
-                        console.log(`error: ${error}`);
+                        console.error('getGameservers() request', `error: ${error}`);
+                        reject(error);
                     }
 
                     var obj = JSON.parse(body);
@@ -200,11 +193,10 @@ class Agones {
                     obj.items.forEach((v, k) => {
                         ret.push({'name': v.metadata.name, 'node': v.status.nodeName, 'address': v.status.address, 'port': v.status.ports[0].port});
                     });
-                    console.log(ret);
                     resolve(ret);
                 });
             }).catch((error) => {
-                console.error(error);
+                console.error('getGameservers()', error);
                 reject(error);
             });
         });
@@ -220,7 +212,7 @@ class Agones {
                     'skipTLSVerify': false,
                     'name': 'loaded-context'});
             }).catch((error) => {
-                console.error(error);
+                console.error('getCluster()', error);
                 reject(error);
             })
         });
@@ -241,7 +233,7 @@ class Agones {
 
             googleJWTClient.authorize((error, access_token) => {
                 if (error) {
-                    console.error(error);
+                    console.error('getUser() request', error);
                     reject(error);
                 }
                 var ret = {"authProvider":{"config": null,"name":"gcp"}, 'name': 'loaded-context'};
@@ -257,12 +249,3 @@ class Agones {
 }
 
 module.exports = Agones;
-
-var d = new Agones({
-    keyFile: 'agones-pingda-sandbox-e09847394108.json',
-    project_id: 'pingda-sandbox',
-    zone: 'us-central1-c',
-    cluster_name: 'agones' 
-});
-
-d.setGameserverReplica('xonotic', 3);

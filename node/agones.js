@@ -216,7 +216,7 @@ class Agones {
                     var obj = JSON.parse(body);
                     var ret = [];
                     obj.items.forEach((v, k) => {
-                        ret.push({'name': v.metadata.name, 'node': v.status.nodeName, 'address': v.status.address, 'port': v.status.ports[0].port});
+                        ret.push({'name': v.metadata.name, 'node': v.status.nodeName, 'address': v.status.address, 'port': v.status.ports[0].port, 'state': v.status.state});
                     });
                     resolve(ret);
                 });

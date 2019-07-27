@@ -15,13 +15,13 @@
 'use strict';
 
 const container = require('@google-cloud/container');
-const {JWT} = require('google-auth-library');
+const {JWT, GoogleAuth} = require('google-auth-library');
 const k8s = require('@kubernetes/client-node');
 const request = require('request');
 
 class Agones {
     constructor(options) {
-        this.keyFile = options.keyFile || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        this.keyFile = options.keyFile;
         this.project_id = options.project_id;
         this.zone = options.zone;
         this.cluster_name = options.cluster_name;
@@ -52,7 +52,14 @@ class Agones {
                 const kc = new k8s.KubeConfig();
                 const opts = {};
 
-                kc.loadFromClusterAndUser(this._cluster, this._user);
+                try {
+                    kc.loadFromClusterAndUser(this._cluster, this._user);
+                }
+                catch (error) {
+                    console.error('loadFromClusterAndUser() error', error);
+                    reject(error);
+                }
+
                 const option = {
                     'url': `${kc.getCurrentCluster().server}/apis/allocation.agones.dev/v1alpha1/namespaces/${this.namespaces}/gameserverallocations`,
                     'method': 'POST',
@@ -110,7 +117,13 @@ class Agones {
                 const request = require('request');
             
                 const kc = new k8s.KubeConfig();
-                kc.loadFromClusterAndUser(this._cluster, this._user);
+                try {
+                    kc.loadFromClusterAndUser(this._cluster, this._user);
+                }
+                catch (error) {
+                    console.error('loadFromClusterAndUser() error', error);
+                    reject(error);
+                }
             
                 const option = {
                     'url': `${kc.getCurrentCluster().server}/apis/stable.agones.dev/v1alpha1/namespaces/${this.namespaces}/fleets/${fleet}/scale`,
@@ -143,7 +156,13 @@ class Agones {
                 const kc = new k8s.KubeConfig();
                 const opts = {};
 
-                kc.loadFromClusterAndUser(this._cluster, this._user);
+                try {
+                    kc.loadFromClusterAndUser(this._cluster, this._user);
+                }
+                catch (error) {
+                    console.error('loadFromClusterAndUser() error', error);
+                    reject(error);
+                }
                 kc.applyToRequest(opts);
 
                 request.get(`${kc.getCurrentCluster().server}/apis/stable.agones.dev/v1alpha1/namespaces/${this.namespaces}/fleets`, opts,
@@ -161,7 +180,7 @@ class Agones {
                         }
                     });
                     resolve(ret);
-                });
+                })
             }).catch((error) => {
                 console.error('getFleet()', error);
                 reject(error);
@@ -178,7 +197,13 @@ class Agones {
                 const kc = new k8s.KubeConfig();
                 const opts = {};
 
-                kc.loadFromClusterAndUser(this._cluster, this._user);
+                try {
+                    kc.loadFromClusterAndUser(this._cluster, this._user);
+                }
+                catch (error) {
+                    console.error('loadFromClusterAndUser() error', error);
+                    reject(error);
+                }
                 kc.applyToRequest(opts);
 
                 request.get(`${kc.getCurrentCluster().server}/apis/stable.agones.dev/v1alpha1/namespaces/${this.namespaces}/gameservers`, opts,
@@ -204,7 +229,12 @@ class Agones {
 
     getCluster() {
         return new Promise((resolve, reject) => {
-            const client = new container.v1.ClusterManagerClient({'keyFileName': this.keyFile});
+            let client;
+            if (this.keyFile != null) {
+                client = new container.v1.ClusterManagerClient({'keyFileName': this.keyFile});
+            } else {
+                client = new container.v1.ClusterManagerClient();
+            }
             client.getCluster({'name': `projects/${this.project_id}/locations/${this.zone}/clusters/${this.cluster_name}`}).then((ret) => {
                 resolve({
                     'caData': ret[0].masterAuth.clusterCaCertificate, 
@@ -220,32 +250,44 @@ class Agones {
     }
 
     getUser() {
-        const googleServiceAccountKey = require(`./${this.keyFile}`);
-
         return new Promise((resolve, reject) => {
-            const googleJWTClient = new JWT(
-                googleServiceAccountKey.client_email,
-                null,
-                googleServiceAccountKey.private_key,
-                ['https://www.googleapis.com/auth/cloud-platform'],
-                null,
-            );
+            var ret = {"authProvider":{"config": null,"name":"gcp"}, 'name': 'loaded-context'};
 
-            googleJWTClient.authorize((error, access_token) => {
-                if (error) {
-                    console.error('getUser() request', error);
-                    reject(error);
-                }
-                var ret = {"authProvider":{"config": null,"name":"gcp"}, 'name': 'loaded-context'};
-                ret.authProvider.config = {
-                    'access-token': access_token.access_token, 
-                    'expiry': new Date(access_token.expiry_date).toISOString()
-                };
-                resolve(ret);
-            });
+            if (this.keyFile != null) {
+                const googleServiceAccountKey = require(`./${this.keyFile}`);
+                const googleJWTClient = new JWT(
+                    googleServiceAccountKey.client_email,
+                    null,
+                    googleServiceAccountKey.private_key,
+                    ['https://www.googleapis.com/auth/cloud-platform'],
+                    null,
+                );
+
+                googleJWTClient.authorize((error, access_token) => {
+                    if (error) {
+                        console.error('getUser() request', error);
+                        reject(error);
+                    }
+                    ret.authProvider.config = {
+                        'access-token': access_token.access_token, 
+                        'expiry': new Date(access_token.expiry_date).toISOString()
+                    };
+                    resolve(ret);
+                });
+            } else {
+                let auth = new GoogleAuth();
+                auth.getAccessToken().then((access_token) => {
+                    let newDate = new Date();
+                    newDate.setMinutes(newDate.getMinutes() + 5);
+                    ret.authProvider.config = {
+                        'access-token': access_token,
+                        'expiry': newDate.toISOString()
+                    };
+                    resolve(ret);
+                })
+            }
         });
     }
-
 }
 
 module.exports = Agones;

@@ -175,7 +175,7 @@ class Agones {
                     var obj = JSON.parse(body);
                     var ret = [];
                     obj.items.forEach((v) => {
-                        if (fleet == null || v.metadata.name == fleet) {
+                        if ((fleet == undefined || fleet == null) || v.metadata.name == fleet) {
                             ret.push(obj)
                         }
                     });
@@ -188,7 +188,7 @@ class Agones {
         });
     }
 
-    getGameservers() {
+    getGameservers(fleet) {
         return new Promise((resolve, reject) => {
             this.refreshToken().then(() => {
                 const k8s = require('@kubernetes/client-node');
@@ -216,6 +216,9 @@ class Agones {
                     var obj = JSON.parse(body);
                     var ret = [];
                     obj.items.forEach((v, k) => {
+                        if ((fleet == undefined || fleet == null) || v.metadata.labels['stable.agones.dev/fleet'] == fleet) {
+                            ret.push(obj)
+                        }
                         ret.push({'name': v.metadata.name, 'node': v.status.nodeName, 'address': v.status.address, 'port': v.status.ports[0].port, 'state': v.status.state});
                     });
                     resolve(ret);

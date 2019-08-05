@@ -16,8 +16,6 @@
 
 const container = require('@google-cloud/container');
 const {JWT, GoogleAuth} = require('google-auth-library');
-const k8s = require('@kubernetes/client-node');
-const request = require('request');
 
 class Agones {
     constructor(options) {
@@ -50,7 +48,6 @@ class Agones {
                 const request = require('request');
 
                 const kc = new k8s.KubeConfig();
-                const opts = {};
 
                 try {
                     kc.loadFromClusterAndUser(this._cluster, this._user);
@@ -215,7 +212,7 @@ class Agones {
 
                     var obj = JSON.parse(body);
                     var ret = [];
-                    obj.items.forEach((v, k) => {
+                    obj.items.forEach((v) => {
                         if ((fleet == undefined || fleet == null) || v.metadata.labels['stable.agones.dev/fleet'] == fleet) {
                             ret.push(obj)
                         }
